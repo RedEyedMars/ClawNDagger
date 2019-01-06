@@ -4,5 +4,10 @@ import com.rem.clawndagger.game.events.Events;
 
 public interface Drawable {
 
+	public static interface Focusable {
+		public Boolean on(Events.Draw.Focus focus);
+		public Boolean on(Events.Draw.Unfocus focus);
+	}
 	public Boolean on(Events.Draw draw);
+	public int getTexture();
 }

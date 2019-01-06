@@ -1,5 +1,9 @@
 package com.rem.clawndagger;
 
-public class ClawNDagger {
+import com.rem.clawndagger.graphics.Gui;
 
+public class ClawNDagger {
+	public static void main(String[] args){
+		new Gui();
+	}
 }

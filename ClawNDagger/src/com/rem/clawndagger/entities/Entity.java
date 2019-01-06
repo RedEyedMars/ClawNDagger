@@ -14,10 +14,10 @@ public class Entity <UpdateType> implements Tickable {
 	protected Motion motion = null;
 	protected Animation<UpdateType> animation = null;
 	protected List<Tickable> tickers1 = new ArrayList<Tickable>();
-	public Entity(int x, int y, Level level){
+	public Entity(double x, double y, Level level){
 		this.motion = new Motion(x,y);
 		this.level = level;
-		this.tickers1.add(T->move(T.get()));
+		//this.tickers1.add(T->move(T.get()));
 	}
 	public Boolean on(Events.Tick tick){
 		tickers1.parallelStream().forEach(T->T.on(tick));
@@ -28,7 +28,7 @@ public class Entity <UpdateType> implements Tickable {
 	}
 	public static class _2 <UpdateType> extends Entity<UpdateType> {
 		protected List<Tickable> tickers2 = new ArrayList<Tickable>();
-		public _2(int x, int y, Level level) {
+		public _2(double x, double y, Level level) {
 			super(x, y, level);
 		}
 		public Boolean on(Events.Tick tick){
@@ -39,7 +39,7 @@ public class Entity <UpdateType> implements Tickable {
 	}
 	public static class _3 <UpdateType> extends _2<UpdateType> {
 		protected List<Tickable> tickers3 = new ArrayList<Tickable>();
-		public _3(int x, int y, Level level) {
+		public _3(double x, double y, Level level) {
 			super(x, y, level);
 		}
 		public Boolean on(Events.Tick tick){

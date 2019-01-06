@@ -2,9 +2,16 @@ package com.rem.clawndagger.game.events;
 
 import java.util.function.Supplier;
 
+import com.rem.clawndagger.game.events.Events.Tick;
+
 public class Events {
 
-	public class Draw {
+	public static class Draw {
+		public class Unfocus {
+		}
+
+		public static class  Focus{
+		}
 
 	}
 

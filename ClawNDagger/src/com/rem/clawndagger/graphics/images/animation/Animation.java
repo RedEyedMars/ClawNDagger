@@ -1,16 +1,16 @@
 package com.rem.clawndagger.graphics.images.animation;
 
-import java.util.Arrays;
 import java.util.stream.IntStream;
 
 import com.rem.clawndagger.entities.motion.Position;
 import com.rem.clawndagger.game.events.Events;
+import com.rem.clawndagger.graphics.Renderer;
 import com.rem.clawndagger.graphics.images.Image;
 import com.rem.clawndagger.graphics.images.ImageTemplate;
 import com.rem.clawndagger.interfaces.Drawable;
 import com.rem.clawndagger.interfaces.Tickable;
 
-public abstract class Animation <UpdateType> implements Tickable, Drawable {
+public abstract class Animation <UpdateType> implements Tickable, Drawable, Drawable.Focusable {
 	protected Image[][] flipBooks;
 	protected int index = 0;
 	protected int flipBookIndex = 0;
@@ -19,11 +19,15 @@ public abstract class Animation <UpdateType> implements Tickable, Drawable {
 	protected int direction = 1;
 	protected double duration = 1.0;
 	protected double current = 0;
-	public Animation(Position position, ImageTemplate[][] imageTemplates){
-		this.flipBooks = new Image[imageTemplates.length][];
-		IntStream.range(0,imageTemplates.length).forEach(I->{
-			flipBooks[I] = new Image[imageTemplates[I].length];
-			IntStream.range(0, imageTemplates[I].length).forEach(J->flipBooks[I][J]=(Image) imageTemplates[I][J].create(position));});
+	protected Renderer.Layer layer;
+	
+	public Animation(Renderer.Layer layer, Position position, ImageTemplate template, int[]...positions) {
+		this.layer = layer;
+		this.flipBooks = new Image[positions.length][];
+		IntStream.range(0,positions.length).forEach(I->{
+			flipBooks[I] = new Image[positions[I].length/2];
+			IntStream.range(0, positions[I].length/2).forEach(J->
+			  flipBooks[I][J*2]=(Image) template.create(position,positions[I][J*2],positions[I][J*2+1]));});
 	}
 	public Boolean on(Events.Tick tick){
 		current += tick.get();
@@ -45,6 +49,17 @@ public abstract class Animation <UpdateType> implements Tickable, Drawable {
 		int temp = endIndex;
 		endIndex = startIndex;
 		startIndex = temp;
+	}
+	public int getTexture(){
+		return flipBooks[0][0].getTexture();
+	}
+	public Boolean on(Events.Draw.Focus focus) {
+		layer.add(this);
+		return true;
+	}
+	public Boolean on(Events.Draw.Unfocus focus) {
+		layer.remove(this);
+		return true;
 	}
 	public abstract Boolean update(UpdateType type);
 }
