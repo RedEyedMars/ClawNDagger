@@ -14,14 +14,14 @@ import com.rem.clawndagger.levels.village.Village;
 
 public class Game implements InputHandler.Events.KeyboardEvent.Listener, InputHandler.Events.MouseEvent.Listener {
 
-	public static final double gravity = 1.0;
+	public static final double gravity = 0.00;
 	protected Double lastTick = System.currentTimeMillis()/1000.0;
 	protected Double thisTick = lastTick;
-	protected Level focus = new Village();
+	protected Level focus = null;
 	protected Entity hero = null;
 	protected boolean[] pressedKeys = new boolean[256];
 	public void load() {
-
+		focus = new Village();
 		focus.on(new Events.Draw.Focus());
 		InputHandler.addKeyboardListener(this);
 		InputHandler.addMouseListener(this);
@@ -29,22 +29,33 @@ public class Game implements InputHandler.Events.KeyboardEvent.Listener, InputHa
 
 	public void update() {
 		thisTick=System.currentTimeMillis()/1000.0;
-		focus.on(new Events.Tick(thisTick));
+		focus.on(new Events.Tick(thisTick-lastTick));
 		if(pressedKeys[1]){
 			Gui.isRunning=false;
 		}
 		if(pressedKeys[17]){
-			Gui.renderer.moveView(0.0f,-0.01f);
+			focus.getHero().getMotion().a.player.y = 0.5;
+			//Gui.renderer.moveView(0.0f,-0.01f);
+		}
+		else if(pressedKeys[31]){
+			focus.getHero().getMotion().a.player.y = -0.5;
+			//Gui.renderer.moveView(0.01f,0.0f);
+		}
+		else {
+			focus.getHero().getMotion().a.player.y = 0.0;
 		}
 		if(pressedKeys[30]){
-			Gui.renderer.moveView(0.01f,0.0f);
+			focus.getHero().getMotion().a.player.x = -0.5;
+			//Gui.renderer.moveView(0.0f,0.01f);
 		}
-		if(pressedKeys[31]){
-			Gui.renderer.moveView(0.0f,0.01f);
+		else if(pressedKeys[32]){
+			focus.getHero().getMotion().a.player.x = 0.5;
+			//Gui.renderer.moveView(-0.01f,0.0f);
 		}
-		if(pressedKeys[32]){
-			Gui.renderer.moveView(-0.01f,0.0f);
+		else {
+			focus.getHero().getMotion().a.player.x = 0.0;
 		}
+		
 		Gui.renderer.render();
 		lastTick=thisTick;
 	}

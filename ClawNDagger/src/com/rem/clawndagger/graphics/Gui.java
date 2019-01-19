@@ -4,6 +4,7 @@ import java.nio.FloatBuffer;
 import org.lwjgl.opengl.PixelFormat;
 
 import com.rem.clawndagger.game.Game;
+import com.rem.clawndagger.graphics.images.ImageLoader;
 
 import java.util.List;
 import org.lwjgl.opengl.GL11;
@@ -24,8 +25,8 @@ public class Gui {
 	protected boolean useCurrentDisplay = false;
 	protected boolean fullScreen = false;
 	protected boolean showMessages = true;
-	protected int displayWidth = 1024;
-	protected int displayHeight = 786;
+	protected int displayWidth = 800;
+	protected int displayHeight = 600;
 	protected int displayColorBits = -1;
 	protected int displayFrequency = -1;
 	protected int depthBufferBits = 24;
@@ -68,84 +69,6 @@ public class Gui {
 		_log.append(toLog);
 		_log.append("\n");
 	}
-	public int getFinishedKey(){
-		return finishedKey;
-	}
-	public void setFinishedKey(int newFinishedKey){
-		finishedKey=newFinishedKey;
-	}
-	public String getWindowTitle(){
-		return window_title;
-	}
-	public void setWindowTitle(String newWindowTitle){
-		window_title=newWindowTitle;
-	}
-	public boolean getVSyncEnabled(){
-		return VSyncEnabled;
-	}
-	public void setVSyncEnabled(boolean newVSyncEnabled){
-		VSyncEnabled=newVSyncEnabled;
-	}
-	public boolean getUseCurrentDisplay(){
-		return useCurrentDisplay;
-	}
-	public void setUseCurrentDisplay(boolean newUseCurrentDisplay){
-		useCurrentDisplay=newUseCurrentDisplay;
-	}
-	public boolean getFullScreen(){
-		return fullScreen;
-	}
-	public void setFullScreen(boolean newFullScreen){
-		fullScreen=newFullScreen;
-	}
-	public boolean getShowMessages(){
-		return showMessages;
-	}
-	public void setShowMessages(boolean newShowMessages){
-		showMessages=newShowMessages;
-	}
-	public int getDisplayWidth(){
-		return displayWidth;
-	}
-	public void setDisplayWidth(int newDisplayWidth){
-		displayWidth=newDisplayWidth;
-	}
-	public int getDisplayHeight(){
-		return displayHeight;
-	}
-	public void setDisplayHeight(int newDisplayHeight){
-		displayHeight=newDisplayHeight;
-	}
-	public int getDisplayColorBits(){
-		return displayColorBits;
-	}
-	public void setDisplayColorBits(int newDisplayColorBits){
-		displayColorBits=newDisplayColorBits;
-	}
-	public int getDisplayFrequency(){
-		return displayFrequency;
-	}
-	public void setDisplayFrequency(int newDisplayFrequency){
-		displayFrequency=newDisplayFrequency;
-	}
-	public int getDepthBufferBits(){
-		return depthBufferBits;
-	}
-	public void setDepthBufferBits(int newDepthBufferBits){
-		depthBufferBits=newDepthBufferBits;
-	}
-	public DisplayMode getOriginalDisplayMode(){
-		return originalDisplayMode;
-	}
-	public void setOriginalDisplayMode(DisplayMode newOriginalDisplayMode){
-		originalDisplayMode=newOriginalDisplayMode;
-	}
-	public DisplayMode getDisplayMode(){
-		return displayMode;
-	}
-	public void setDisplayMode(DisplayMode newDisplayMode){
-		displayMode=newDisplayMode;
-	}
 	public void initializeDisplay(){
 		originalDisplayMode=Display.getDisplayMode();
 		Gui.log("GLApp.initDisplay(): Current display mode is "+originalDisplayMode);
@@ -182,7 +105,6 @@ public class Gui {
 			}
 			Gui.log("initializeDisplay: Setting display mode to "+displayMode+" with pixel depth = "+depthBufferBits);
 			Display.setDisplayMode(displayMode);
-			displayMode=displayMode;
 			displayWidth=displayMode.getWidth();
 			displayHeight=displayMode.getHeight();
 			displayColorBits=displayMode.getBitsPerPixel();
@@ -246,12 +168,6 @@ public class Gui {
 		inputHandler.end();
 		renderer.end();
 	}
-	public static interface Renderable {
-		public int getTexture();
-		public void render();
-		public void animate();
-	}
-	
 	public static class Colour {
 		public Float getRedF(){
 			return null;

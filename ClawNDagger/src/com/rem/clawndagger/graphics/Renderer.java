@@ -16,9 +16,9 @@ import java.util.LinkedList;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.Display;
 public class Renderer {
-	protected float viewX = 0f;
-	protected float viewY = 0f;
-	protected float viewZ = 0f;
+	public float viewX = 0f;
+	public float viewY = 0f;
+	public float viewZ = 0f;
 	protected float aspectRatio = 0f;
 	protected int viewportX = 0;
 	protected int viewportY = 0;
@@ -148,7 +148,6 @@ public class Renderer {
 		protected int status = UNSTARTED;
 		public void add(Drawable toAdd){
 			synchronized(events){
-				System.out.println("Add?");
 				events.push(new Layer.Addition(toAdd));
 				if(status==WAITING_FOR_EVENT){
 					events.notifyAll();
@@ -200,16 +199,16 @@ public class Renderer {
 			start();
 		}
 		public void render(){
-			int previousTexture = -2;
 			synchronized(layer){
 				Events.Draw draw = new Events.Draw();
-				for(Drawable drawable:layer){
+				layer.stream().reduce(-2,(previousTexture,drawable)->{
 					if(drawable.getTexture()!=previousTexture){
 						previousTexture=drawable.getTexture();
 						GL11.glBindTexture(GL11.GL_TEXTURE_2D,previousTexture);
 					}
 					drawable.on(draw);
-				}
+					return drawable.getTexture();
+				},(P,N)->N);
 			}
 		}
 		public Layer (){
@@ -218,11 +217,9 @@ public class Renderer {
 		public class Addition implements Supplier<Boolean> {
 			protected Drawable toAdd = null;
 			public Addition (Drawable toAdd){
-				System.out.println("Add:"+toAdd);
 				this.toAdd=toAdd;
 			}
 			public Boolean get(){
-				System.out.println("get:"+toAdd);
 				return layer.add(toAdd);
 			}
 			public Addition (){

@@ -8,7 +8,9 @@ public class ImageTemplate {
 
 
 
-	public static ImageTemplate CLAWMENT_BASE = new ImageTemplate();
+	public static final ImageTemplate CLAWMENT_BASE_2 = new ImageTemplate("./res/entities/BaseClawment.png");
+
+	public static final ImageTemplate CLAWMENT_BASE = new ImageTemplate("./res/entities/BaseClawment2.png");
 
 	private int texture;
 	private FloatBuffer[][] textureBuffer;
@@ -16,6 +18,13 @@ public class ImageTemplate {
 
 	private FloatBuffer[][] flipped_textureBuffer;
 
+	private String fileName;
+	public ImageTemplate(String fileName){
+		this.fileName = fileName;
+	}
+	public String getFileName(){
+		return fileName;
+	}
 	public Image create(Position position, int x, int y) {
 		return new Image(textureBuffer[x][y],texture,position);
 	}

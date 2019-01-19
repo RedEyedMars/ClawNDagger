@@ -19,9 +19,9 @@ public class Hero extends Entity._3<Hero.State> implements Drawable, Drawable.Fo
 		private boolean jumping = false;
 	}
 	private State state = new State();
-	public Hero(double x, double y, Level level) {
+	public Hero(ImageTemplate heroImageTemplate,double x, double y, Level level) {
 		super(x, y, level);
-		animation = new Animation<Hero.State>(Renderer.midLayer,motion,ImageTemplate.CLAWMENT_BASE,new int[]{0,0}){ 
+		animation = new Animation<Hero.State>(Renderer.topLayer ,dimensions,heroImageTemplate,new int[]{0,0}){ 
 			@Override
 			public Boolean update(State state) {
 				if(state.jumping){

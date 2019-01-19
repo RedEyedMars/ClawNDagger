@@ -231,17 +231,7 @@ public class InputHandler extends Thread {
 			System.err.println("Renderer hideHardwareCursor(): error");
 		}
 	}
-	public InputHandler (int status,List<InputHandler.Event> events,int cursorX,int cursorY,boolean firstMove,boolean continuousKeyboard,boolean hideNativeCursor,boolean disableNativeCursor){
-		super();
-		this.status=status;
-		this.events=events;
-		this.cursorX=cursorX;
-		this.cursorY=cursorY;
-		this.firstMove=firstMove;
-		this.continuousKeyboard=continuousKeyboard;
-		this.hideNativeCursor=hideNativeCursor;
-		this.disableNativeCursor=disableNativeCursor;
-	}
+	
 	public InputHandler (){
 		super();
 	}

@@ -7,25 +7,21 @@ import java.util.stream.Collectors;
 
 import com.rem.clawndagger.levels.Collisionable;
 
-public class Motion extends Position{
+public class Motion {
 
-	private Position speed = new Position(0,0);
-	private Acceleration acceleration = new Acceleration(0,0);
+	public Position s = new Position(0,0);
+	public Acceleration a = new Acceleration(0,0);
 	private Set<Predicate<Collisionable>> collisionListeners = new HashSet<Predicate<Collisionable>>();
-	public Motion(double x, double y) {
-		super(x, y);
-	}
-	public Boolean next(double t) {
-		x = x + speed.getX()*t;
-		y = y + speed.getY()*t;
-		speed.x = speed.x + acceleration.getX()*t;
-		speed.y = speed.y + acceleration.getY()*t;
-		acceleration.next(t);
-		return true;
-	}
+	private Position leftBound;
+	private Position rightBound;
+	
 	public Boolean next(Position position, double t){
-		position.x = x + speed.getX()*t;
-		position.y = y + speed.getY()*t;
+		//System.out.println(s.x);
+		position.x = position.x + s.x*t;
+		position.y = position.y + s.y*t;
+		s.x = s.x + a.x*t;
+		s.y = s.y + a.y*t;
+		a.next(t);
 		return true;
 	}
 	public Boolean collide(Collisionable collider){
@@ -37,5 +33,30 @@ public class Motion extends Position{
 	}
 	public Boolean removeCollisionListener(Predicate<Collisionable> listener) {
 		return this.collisionListeners .remove(listener);
+	}
+	public double getAngleToAcceleration() {
+		if(a.x==0){
+			return  -Math.PI/2;
+		}
+		else {
+			return Math.atan2(a.y, a.x);
+		}
+	}
+	public double getAngleToSpeed() {
+		if(s.x==0){
+			if(s.y>=0){
+				return  Math.PI/2;
+			}
+			else {
+				return  -Math.PI/2;
+			}
+		}
+		else {
+			return Math.atan2(s.y, s.x);
+		}
+	}
+	public void mustProceed(Position left, Position right) {
+		leftBound = left;
+		rightBound = right;
 	}
 }
