@@ -1,13 +1,15 @@
-package com.rem.clawndagger.levels;
+package com.rem.clawndagger.interfaces;
 
+import com.rem.clawndagger.entities.motion.BooleanBox;
 import com.rem.clawndagger.entities.motion.Encroachment;
-import com.rem.clawndagger.entities.motion.Motion;
 import com.rem.clawndagger.entities.motion.Rectangle;
 
 public interface Collisionable {
 
-	public Bump findCollision(Rectangle rect);
-	public Boolean rectifyCollision(Rectangle oldRectangle, Encroachment[] ofAttack, Motion motion);
+	//public Bump findCollision(Rectangle rect);
+	//public Boolean rectifyCollision(Rectangle oldRectangle, Encroachment[] ofAttack, Motion motion);
+	public Rectangle getRect();
+	public BooleanBox getEdges();
 	public static class Bump {
 		public Collisionable bumper;
 		public Encroachment[] solution;

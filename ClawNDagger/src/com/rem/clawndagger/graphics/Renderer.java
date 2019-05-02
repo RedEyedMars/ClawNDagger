@@ -6,7 +6,10 @@ import com.rem.clawndagger.game.events.Events;
 import com.rem.clawndagger.interfaces.Drawable;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -47,14 +50,14 @@ public class Renderer {
 		GL11.glMatrixMode(GL11.GL_MODELVIEW);
 		GL11.glLoadIdentity();
 		GLU.gluLookAt(0f,0f,1f,0f,0f,0f,0f,1f,0f);
-		GL11.glTranslatef(-0.7521f+viewX,-0.565f+viewY,-1.107f+viewZ);
+		GL11.glTranslatef(-0.6075f+viewX,-0.45f+viewY,-.2475f+viewZ);
 		GL11.glScalef(1.504f,1.12875f,1f);
-		
+
 		GL11.glEnableClientState(GL11.GL_VERTEX_ARRAY);
 		GL11.glEnableClientState(GL11.GL_TEXTURE_COORD_ARRAY);
 		GL11.glFrontFace(GL11.GL_CW);
 		GL11.glPushMatrix();
-		
+
 		baseLayer.render();
 		botLayer.render();
 		midLayer.render();
@@ -140,59 +143,58 @@ public class Renderer {
 		super();
 	}
 	public static class Layer extends Thread {
-		public static int UNSTARTED = -1;
-		public static int WAITING_FOR_EVENT = 0;
-		public static int PROCESSING_EVENTS = 1;
-		protected List<Drawable> layer = new ArrayList<Drawable>();
-		protected LinkedList<Supplier<Boolean>> events = new LinkedList<Supplier<Boolean>>();
-		protected int status = UNSTARTED;
-		public void add(Drawable toAdd){
-			synchronized(events){
-				events.push(new Layer.Addition(toAdd));
-				if(status==WAITING_FOR_EVENT){
-					events.notifyAll();
-				}
+		private enum Status {
+			UNSTARTED(E->{}),WAITING_FOR_EVENT(Object::notifyAll),PROCESSING_EVENTS(E->{});
+
+			private final Consumer<LinkedList<Consumer<List<Drawable>>>> notify;
+			private Status(Consumer<LinkedList<Consumer<List<Drawable>>>>
+			notify) {
+				this.notify = notify;
 			}
 		}
-		public void remove(Drawable toRemove){
+		protected List<Drawable> layer = new ArrayList<Drawable>();
+		protected LinkedList<Consumer<List<Drawable>>> events = new LinkedList<Consumer<List<Drawable>>>();
+		protected Status status = Status.UNSTARTED;
+		private void change(Consumer<List<Drawable>> method) {
 			synchronized(events){
-				events.push(new Layer.Removal(toRemove));
-				if(status==WAITING_FOR_EVENT){
-					events.notifyAll();
-				}
+				events.push(method);
+				status.notify.accept(events);
 			}
+		}
+		public void add(Drawable toAdd){
+			change(L->L.add(toAdd));
+		}
+		public void remove(Drawable toRemove){
+			change(L->L.remove(toRemove));
 		}
 		public void run(){
 			try{
 				while(Gui.isRunning){
 					synchronized(events){
+						status=Status.WAITING_FOR_EVENT;
 						while(Gui.isRunning&&events.isEmpty()){
-							status=WAITING_FOR_EVENT;
 							events.wait();
-							status=PROCESSING_EVENTS;
 						}
+						status=Status.PROCESSING_EVENTS;
 					}
-					while(Gui.isRunning){
-						synchronized(layer){
-							synchronized(events){
-								if(events.isEmpty()){
-									break;
-								}
-								events.pollFirst().get();
-							}
-						}
-					}
+					pollEvents();
 				}
 			}
 			catch(Exception e0){
 				e0.printStackTrace();
 			}
 		}
+		private void pollEvents() {
+			Stream.generate(()->{synchronized(layer) {synchronized(events) {
+				return events.pollFirst();}}})
+			.unordered()
+			.takeWhile(S->Gui.isRunning)
+			.takeWhile(Objects::nonNull)
+			.forEach(C->C.accept(layer));
+		}
 		public void end(){
-			if(status==WAITING_FOR_EVENT){
-				synchronized(events){
-					events.notifyAll();
-				}
+			synchronized(events){
+				status.notify.accept(events);
 			}
 		}
 		public void load(){
@@ -200,42 +202,8 @@ public class Renderer {
 		}
 		public void render(){
 			synchronized(layer){
-				Events.Draw draw = new Events.Draw();
-				layer.stream().reduce(-2,(previousTexture,drawable)->{
-					if(drawable.getTexture()!=previousTexture){
-						previousTexture=drawable.getTexture();
-						GL11.glBindTexture(GL11.GL_TEXTURE_2D,previousTexture);
-					}
-					drawable.on(draw);
-					return drawable.getTexture();
-				},(P,N)->N);
-			}
-		}
-		public Layer (){
-			super();
-		}
-		public class Addition implements Supplier<Boolean> {
-			protected Drawable toAdd = null;
-			public Addition (Drawable toAdd){
-				this.toAdd=toAdd;
-			}
-			public Boolean get(){
-				return layer.add(toAdd);
-			}
-			public Addition (){
-				super();
-			}
-		}
-		public class Removal implements Supplier<Boolean> {
-			protected Drawable toRemove = null;
-			public Removal (Drawable toRemove){
-				this.toRemove=toRemove;
-			}
-			public Boolean get(){
-				return layer.remove(toRemove);
-			}
-			public Removal (){
-				super();
+				layer.stream()
+				.reduce(new Events.Draw(),(draw,drawable)->drawable.on(draw),(P,N)->N);
 			}
 		}
 	}

@@ -1,121 +1,84 @@
 package com.rem.clawndagger.graphics;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.LinkedList;
 import java.nio.ByteOrder;
 import org.lwjgl.input.Cursor;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
 import org.lwjgl.input.Keyboard;
 import java.nio.ByteBuffer;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.input.Mouse;
 import java.nio.IntBuffer;
 public class InputHandler extends Thread {
-	public static int UNSTARTED = -1;
-	public static int WAITING_FOR_EVENTS = 0;
-	public static int PROCESSING_EVENTS = 1;
-	protected int status = UNSTARTED;
-	protected List<InputHandler.Event> events = new ArrayList<InputHandler.Event>();
-	protected int cursorX = 0;
-	protected int cursorY = 0;
-	protected boolean firstMove = true;
-	protected boolean continuousKeyboard = false;
-	protected boolean hideNativeCursor = false;
-	protected boolean disableNativeCursor = false;
-	public int getStatus(){
-		return status;
-	}
-	public void setStatus(int newStatus){
-		status=newStatus;
-	}
-	public List<InputHandler.Event> getEvents(){
-		return events;
-	}
-	public void setEvents(List<InputHandler.Event> newEvents){
-		events=newEvents;
-	}
-	public int getCursorX(){
-		return cursorX;
-	}
-	public void setCursorX(int newCursorX){
-		cursorX=newCursorX;
-	}
-	public int getCursorY(){
-		return cursorY;
-	}
-	public void setCursorY(int newCursorY){
-		cursorY=newCursorY;
-	}
-	public boolean getFirstMove(){
-		return firstMove;
-	}
-	public void setFirstMove(boolean newFirstMove){
-		firstMove=newFirstMove;
-	}
-	public boolean getContinuousKeyboard(){
-		return continuousKeyboard;
-	}
-	public void setContinuousKeyboard(boolean newContinuousKeyboard){
-		continuousKeyboard=newContinuousKeyboard;
-	}
-	public boolean getHideNativeCursor(){
-		return hideNativeCursor;
-	}
-	public void setHideNativeCursor(boolean newHideNativeCursor){
-		hideNativeCursor=newHideNativeCursor;
-	}
-	public boolean getDisableNativeCursor(){
-		return disableNativeCursor;
-	}
-	public void setDisableNativeCursor(boolean newDisableNativeCursor){
-		disableNativeCursor=newDisableNativeCursor;
-	}
-	public static void addMouseListener(InputHandler.Events.MouseEvent.Listener toAdd){
-		synchronized(InputHandler.Events.MouseEvent.listeners){
-			InputHandler.Events.MouseEvent.listeners.add(toAdd);
+	private enum Status {
+		UNSTARTED(()->{throw new RuntimeException("Unable to wait for UNSTARTED status!");}
+				 ,()->true),
+		WAITING_FOR_INPUT(
+				Status::waitingForInput,
+				Status::notifyOfInput),
+		PROCESSING(()->true,()->true)
+		;
+		public static Status status = UNSTARTED;
+		public final Supplier<Boolean> waiting;
+		public final Supplier<Boolean> notifying;
+		private Status(Supplier<Boolean> waiting,
+				Supplier<Boolean> notifying) {
+			this.waiting = waiting;
+			this.notifying = notifying;
 		}
-	}
-	public static void removeMouseListener(InputHandler.Events.MouseEvent.Listener toRemove){
-		synchronized(InputHandler.Events.MouseEvent.listeners){
-			InputHandler.Events.MouseEvent.listeners.remove(toRemove);
+		public static boolean notifyOfInput() {
+			synchronized(status) {
+			status.notifyAll();
+			status=PROCESSING;
+			}
+			return true;
 		}
-	}
-	public static void addMouseWheelListener(InputHandler.Events.MouseWheelEvent.Listener toAdd){
-		synchronized(InputHandler.Events.MouseWheelEvent.listeners){
-			InputHandler.Events.MouseWheelEvent.listeners.add(toAdd);
-		}
-	}
-	public static void removeWheelMouseListener(InputHandler.Events.MouseWheelEvent.Listener toRemove){
-		synchronized(InputHandler.Events.MouseWheelEvent.listeners){
-			InputHandler.Events.MouseWheelEvent.listeners.remove(toRemove);
-		}
-	}
-	public static void addKeyboardListener(InputHandler.Events.KeyboardEvent.Listener toAdd){
-		synchronized(InputHandler.Events.KeyboardEvent.listeners){
-			InputHandler.Events.KeyboardEvent.listeners.add(toAdd);
-		}
-	}
-	public static void removeKeyboardListener(InputHandler.Events.KeyboardEvent.Listener toRemove){
-		synchronized(InputHandler.Events.KeyboardEvent.listeners){
-			InputHandler.Events.KeyboardEvent.listeners.remove(toRemove);
-		}
-	}
-	public void run(){
-		try{
-			while(Gui.isRunning){
-				status=WAITING_FOR_EVENTS;
-				synchronized(events){
-					while(Gui.isRunning&&events.isEmpty()){
-						events.wait();
+		public static boolean waitingForInput() {
+			try {
+				synchronized(status) {
+					while(Gui.isRunning&&status==WAITING_FOR_INPUT){
+						status.wait();	
 					}
 				}
-				status=PROCESSING_EVENTS;
-				while(events.isEmpty()==false){
-					events.remove(0).handle();
-				}
+			} catch (InterruptedException e) {
+				e.printStackTrace();
 			}
+			return Gui.isRunning;
 		}
-		catch(InterruptedException e0){
-			e0.printStackTrace();
-		}
+	}
+	public static class Listeners{
+		public static List<InputHandler.Events.KeyboardEvent.Listener> keyboard =
+				new CopyOnWriteArrayList<InputHandler.Events.KeyboardEvent.Listener>();
+		public static List<InputHandler.Events.MouseWheelEvent.Listener> mousewheel =
+				new CopyOnWriteArrayList<InputHandler.Events.MouseWheelEvent.Listener>();
+		public static List<InputHandler.Events.MouseEvent.Listener> mouse =
+				new CopyOnWriteArrayList<InputHandler.Events.MouseEvent.Listener>();
+	}
+	protected static int cursorX = 0;
+	protected static int cursorY = 0;
+	protected boolean firstMove = true;
+	protected static boolean continuousKeyboard = false;
+	protected boolean hideNativeCursor = false;
+	protected boolean disableNativeCursor = false;
+
+	public void run(){
+		Status.status=Status.WAITING_FOR_INPUT;
+		Stream.generate(InputHandler::generateEvents)
+		.takeWhile(S->Status.status.waiting.get())
+		.flatMap(S->S.get())
+		.takeWhile(S->Gui.isRunning)
+		.flatMap(E->E)
+		.takeWhile(S->Gui.isRunning)
+		.forEach(E->E.get().handle());
 	}
 	public void load(DisplayMode displayMode){
 		try{
@@ -135,63 +98,28 @@ public class InputHandler extends Thread {
 		}
 		start();
 	}
+	public static Supplier<Stream<Stream<Supplier<Event>>>> generateEvents(){
+		return  ()->
+				Stream.of(
+						InputHandler.Events.MouseWheelEvent.stream(),
+						InputHandler.Events.MouseEvent.stream(),
+						InputHandler.Events.MouseEvent.movementStreams(),
+						//Keyboard.next()?
+						InputHandler.Events.KeyboardEvent.stream()//:
+						
+						/*Stream.of((Supplier<Event>)()->new InputHandler.Events.KeyboardEvent.Press(Keyboard.getEventKey(),Keyboard.getEventCharacter()))
+							  .filter(S->continuousKeyboard&&Keyboard.getEventKeyState())
+						*/
+						);
+	}
 	public void handle(){
-		int mouseDX = Mouse.getDX();
-		int mouseDY = Mouse.getDY();
-		int mouseDW = Mouse.getDWheel();
-		synchronized(events){
-			if(mouseDX!=0||mouseDY!=0||mouseDW!=0){
-				cursorX=Mouse.getX();
-				cursorY=Mouse.getY();
-				events.add(new InputHandler.Events.MouseEvent.Move(cursorX,cursorY));
-			}
-			if(mouseDW!=0){
-				events.add(new InputHandler.Events.MouseWheelEvent(mouseDW));
-			}
-			while(Mouse.next()){
-				if(Mouse.getEventButtonState()){
-					events.add(new InputHandler.Events.MouseEvent.Press(Mouse.getEventButton(),cursorX,cursorY));
-				}
-				else{
-					events.add(new InputHandler.Events.MouseEvent.Release(Mouse.getEventButton(),cursorX,cursorY));
-				}
-			}
-			if(Mouse.isButtonDown(0)){
-				events.add(new InputHandler.Events.MouseEvent.Drag(0,cursorX,cursorY));
-			}
-			if(Mouse.isButtonDown(1)){
-				events.add(new InputHandler.Events.MouseEvent.Drag(1,cursorX,cursorY));
-			}
-			if(Keyboard.next()){
-				if(Keyboard.getEventKeyState()){
-					events.add(new InputHandler.Events.KeyboardEvent.Press(Keyboard.getEventKey(),Keyboard.getEventCharacter()));
-				}
-				else{
-					events.add(new InputHandler.Events.KeyboardEvent.Release(Keyboard.getEventKey()));
-				}
-				while(Keyboard.next()){
-					if(Keyboard.getEventKeyState()){
-						events.add(new InputHandler.Events.KeyboardEvent.Press(Keyboard.getEventKey(),Keyboard.getEventCharacter()));
-					}
-					else{
-						events.add(new InputHandler.Events.KeyboardEvent.Release(Keyboard.getEventKey()));
-					}
-				}
-			}
-			else if(continuousKeyboard&&Keyboard.getEventKeyState()){
-				events.add(new InputHandler.Events.KeyboardEvent.Press(Keyboard.getEventKey(),Keyboard.getEventCharacter()));
-			}
-			if(status==WAITING_FOR_EVENTS){
-				events.notifyAll();
-			}
+		if(Status.status==Status.UNSTARTED){
+			return;
 		}
+		Status.status.notifying.get();
 	}
 	public void end(){
-		if(status==WAITING_FOR_EVENTS){
-			synchronized(events){
-				events.notifyAll();
-			}
-		}
+		Status.status.notifying.get();
 	}
 	public void disableNativeCursor(boolean newNativeCursorValue){
 		disableNativeCursor=newNativeCursorValue;
@@ -210,14 +138,9 @@ public class InputHandler extends Thread {
 				int cursorImageCount = 1;
 				int cursorWidth = Cursor.getMaxCursorSize();
 				int cursorHeight = cursorWidth;
-				IntBuffer cursorImages = null;
 				IntBuffer cursorDelays = null;
-				cursorImages=ByteBuffer.allocateDirect(cursorWidth*cursorHeight*cursorImageCount*4).order(ByteOrder.nativeOrder()).asIntBuffer();
-				for(int i = 0;i<cursorWidth;++i){
-					for(int j = 0;j<cursorHeight;++j){
-						cursorImages.put(0x00000000);
-					}
-				}
+				IntBuffer cursorImages=ByteBuffer.allocateDirect(cursorWidth*cursorHeight*cursorImageCount*4).order(ByteOrder.nativeOrder()).asIntBuffer();
+				IntStream.range(0,cursorWidth*cursorHeight).forEach(I->cursorImages.put(0x00000000));
 				cursorImages.flip();
 				cursor=new Cursor(Cursor.getMaxCursorSize(),Cursor.getMaxCursorSize(),Cursor.getMaxCursorSize()/2,Cursor.getMaxCursorSize()/2,cursorImageCount,cursorImages,cursorDelays);
 				Mouse.setNativeCursor(cursor);
@@ -231,7 +154,7 @@ public class InputHandler extends Thread {
 			System.err.println("Renderer hideHardwareCursor(): error");
 		}
 	}
-	
+
 	public InputHandler (){
 		super();
 	}
@@ -240,10 +163,13 @@ public class InputHandler extends Thread {
 			super();
 		}
 		public static class MouseWheelEvent extends InputHandler.Event {
-			public static List<InputHandler.Events.MouseWheelEvent.Listener> listeners = new ArrayList<InputHandler.Events.MouseWheelEvent.Listener>();
 			protected int amount = 0;
 			public int getAmount(){
 				return amount;
+			}
+			public static Stream<Supplier<Event>> stream() {
+				return Stream.of((Supplier<Event>)()->new InputHandler.Events.MouseWheelEvent(Mouse.getDWheel()))
+							    .filter(S->Mouse.getDWheel()!=0);
 			}
 			public void setAmount(int newAmount){
 				amount=newAmount;
@@ -252,181 +178,124 @@ public class InputHandler extends Thread {
 				this.amount=amount;
 			}
 			public void handle(){
-				synchronized(InputHandler.Events.MouseWheelEvent.listeners){
-					for(InputHandler.Events.MouseWheelEvent.Listener listener:InputHandler.Events.MouseWheelEvent.listeners){
-						listener.listen(this);
-					}
-				}
-			}
-			public MouseWheelEvent (){
-				super();
+				InputHandler.Listeners.mousewheel
+				.forEach(L->L.listen(MouseWheelEvent.this));
 			}
 			public static interface Listener {
 				public void listen(InputHandler.Events.MouseWheelEvent event);
 			}
 		}
-		public static class MouseEvent extends InputHandler.Event {
-			public static List<InputHandler.Events.MouseEvent.Listener> listeners = new ArrayList<InputHandler.Events.MouseEvent.Listener>();
-			protected int cursorX = 0;
-			protected int cursorY = 0;
-			protected boolean isLeftButton = false;
-			protected boolean isRightButton = false;
-			public int getCursorX(){
-				return cursorX;
+		public static class MouseEvent extends Event{
+			public enum Type {
+				Move(false,false,InputHandler.Events.MouseEvent.Listener::mouseMove),
+
+				Drag_Left(true,false,InputHandler.Events.MouseEvent.Listener::mouseDrag),
+				Drag_Right(false,true,InputHandler.Events.MouseEvent.Listener::mouseDrag),
+
+				Press_Left(true,false,InputHandler.Events.MouseEvent.Listener::mousePress),
+				Press_Right(false,true,InputHandler.Events.MouseEvent.Listener::mousePress),
+
+				Release_Left(false,false,InputHandler.Events.MouseEvent.Listener::mouseRelease),
+				Release_Right(false,false,InputHandler.Events.MouseEvent.Listener::mouseRelease)
+				;
+				public final boolean isLeftButton;
+				public final boolean isRightButton;
+				public final BiConsumer<InputHandler.Events.MouseEvent.Listener,
+				InputHandler.Events.MouseEvent> handle;
+				private Type(boolean isLeftButton,
+						boolean isRightButton,
+						BiConsumer<InputHandler.Events.MouseEvent.Listener,
+						InputHandler.Events.MouseEvent> handle) {
+					this.isLeftButton = isLeftButton;
+					this.isRightButton = isRightButton;
+					this.handle = handle;
+				}
 			}
-			public void setCursorX(int newCursorX){
-				cursorX=newCursorX;
-			}
-			public int getCursorY(){
-				return cursorY;
-			}
-			public void setCursorY(int newCursorY){
-				cursorY=newCursorY;
-			}
-			public boolean getIsLeftButton(){
-				return isLeftButton;
-			}
-			public void setIsLeftButton(boolean newIsLeftButton){
-				isLeftButton=newIsLeftButton;
-			}
-			public boolean getIsRightButton(){
-				return isRightButton;
-			}
-			public void setIsRightButton(boolean newIsRightButton){
-				isRightButton=newIsRightButton;
-			}
-			public MouseEvent (int cursorX,int cursorY){
+
+
+			protected final int cursorX;
+			protected final int cursorY;
+			private Type type;
+
+			public MouseEvent (
+					int cursorX,int cursorY,
+					MouseEvent.Type type){
 				this.cursorX=cursorX;
 				this.cursorY=cursorY;
+				this.type = type;
 			}
-			public boolean isDrag(){
-				return false;
+			public static Stream<Supplier<Event>> movementStreams() {
+				return
+						Stream.of(
+						Stream.of((Supplier<Event>)()->InputHandler.Events.MouseEvent.move(Mouse.getX(),Mouse.getY()))
+							  .filter(S->Mouse.getDX()!=0||Mouse.getDY()!=0||Mouse.getDWheel()!=0),
+						Stream.of((Supplier<Event>)()->InputHandler.Events.MouseEvent.drag(0,Mouse.getX(),Mouse.getY()))
+							  .filter(S->Mouse.isButtonDown(0)),
+					    Stream.of((Supplier<Event>)()->InputHandler.Events.MouseEvent.drag(1,Mouse.getX(),Mouse.getY()))
+					    	  .filter(S->Mouse.isButtonDown(1)))
+						.flatMap(S->S);
 			}
-			public boolean isMove(){
-				return false;
-			}
-			public boolean isPress(){
-				return false;
-			}
-			public boolean isRelease(){
-				return false;
-			}
-			public MouseEvent (int cursorX,int cursorY,boolean isLeftButton,boolean isRightButton){
-				super();
-				this.cursorX=cursorX;
-				this.cursorY=cursorY;
-				this.isLeftButton=isLeftButton;
-				this.isRightButton=isRightButton;
-			}
-			public MouseEvent (){
-				super();
+			public static Stream<Supplier<Event>> stream() {
+				return Stream.generate(()->Mouse.next())
+						.takeWhile(B->B)
+						.map(B->Mouse.getEventButtonState())
+						.map(S->S?
+								()->InputHandler.Events.MouseEvent.press(Mouse.getEventButton(),Mouse.getX(),Mouse.getY()):
+								()->InputHandler.Events.MouseEvent.release(Mouse.getEventButton(),Mouse.getX(),Mouse.getY()));
 			}
 			public static interface Listener {
-				public void listen(InputHandler.Events.MouseEvent.Drag event);
-				public void listen(InputHandler.Events.MouseEvent.Press event);
-				public void listen(InputHandler.Events.MouseEvent.Release event);
-				public void listen(InputHandler.Events.MouseEvent.Move event);
+				public void mouseDrag(InputHandler.Events.MouseEvent event);
+				public void mousePress(InputHandler.Events.MouseEvent event);
+				public void mouseRelease(InputHandler.Events.MouseEvent event);
+				public void mouseMove(InputHandler.Events.MouseEvent event);
 			}
-			public static class Move extends InputHandler.Events.MouseEvent {
-				public Move (int cursorX,int cursorY){
-					super(cursorX,cursorY);
-				}
-				public boolean isMove(){
-					return true;
-				}
-				public void handle(){
-					synchronized(InputHandler.Events.MouseEvent.listeners){
-						for(InputHandler.Events.MouseEvent.Listener listener:InputHandler.Events.MouseEvent.listeners){
-							listener.listen(this);
-						}
-					}
-				}
-				public Move (){
-					super();
-				}
-				public Move (int cursorX,int cursorY,boolean isLeftButton,boolean isRightButton){
-					super(cursorX,cursorY,isLeftButton,isRightButton);
-				}
+
+			public void handle(){
+				InputHandler.Listeners.mouse.forEach(
+						L->type.handle.accept(L,MouseEvent.this));
 			}
-			public static class Drag extends InputHandler.Events.MouseEvent {
-				public Drag (int cursorX,int cursorY){
-					super(cursorX,cursorY);
-				}
-				public Drag (int button,int cursorX,int cursorY){
-					super(cursorX,cursorY);
-					setIsLeftButton(button==0);
-					setIsRightButton(button==1);
-				}
-				public boolean isDrag(){
-					return true;
-				}
-				public void handle(){
-					synchronized(InputHandler.Events.MouseEvent.listeners){
-						for(InputHandler.Events.MouseEvent.Listener listener:InputHandler.Events.MouseEvent.listeners){
-							listener.listen(this);
-						}
-					}
-				}
-				public Drag (){
-					super();
-				}
-				public Drag (int cursorX,int cursorY,boolean isLeftButton,boolean isRightButton){
-					super(cursorX,cursorY,isLeftButton,isRightButton);
-				}
+			public static InputHandler.Events.MouseEvent move(int cursorX,int cursorY){
+				return new InputHandler.Events.MouseEvent(cursorX,cursorY,
+						MouseEvent.Type.Move
+						);
 			}
-			public static class Press extends InputHandler.Events.MouseEvent {
-				public Press (int button,int cursorX,int cursorY){
-					super(cursorX,cursorY);
-					setIsLeftButton(button==0);
-					setIsRightButton(button==1);
-				}
-				public boolean isPress(){
-					return true;
-				}
-				public void handle(){
-					synchronized(InputHandler.Events.MouseEvent.listeners){
-						for(InputHandler.Events.MouseEvent.Listener listener:InputHandler.Events.MouseEvent.listeners){
-							listener.listen(this);
-						}
-					}
-				}
-				public Press (){
-					super();
-				}
-				public Press (int cursorX,int cursorY,boolean isLeftButton,boolean isRightButton){
-					super(cursorX,cursorY,isLeftButton,isRightButton);
-				}
+			public static InputHandler.Events.MouseEvent drag(
+					int button,int cursorX,int cursorY){
+				return new InputHandler.Events.MouseEvent(cursorX,cursorY,
+						button==0?MouseEvent.Type.Drag_Left:
+							MouseEvent.Type.Drag_Right
+						);
 			}
-			public static class Release extends InputHandler.Events.MouseEvent {
-				public Release (int button,int cursorX,int cursorY){
-					super(cursorX,cursorY);
-					setIsLeftButton(button==0);
-					setIsRightButton(button==1);
-				}
-				public boolean isRelease(){
-					return true;
-				}
-				public void handle(){
-					synchronized(InputHandler.Events.MouseEvent.listeners){
-						for(InputHandler.Events.MouseEvent.Listener listener:InputHandler.Events.MouseEvent.listeners){
-							listener.listen(this);
-						}
-					}
-				}
-				public Release (){
-					super();
-				}
-				public Release (int cursorX,int cursorY,boolean isLeftButton,boolean isRightButton){
-					super(cursorX,cursorY,isLeftButton,isRightButton);
-				}
+			public static InputHandler.Events.MouseEvent press(
+					int button,int cursorX,int cursorY){
+				return new InputHandler.Events.MouseEvent(cursorX,cursorY,
+						button==0?MouseEvent.Type.Press_Left:
+							MouseEvent.Type.Press_Right
+						);
+			}
+			public static InputHandler.Events.MouseEvent release(
+					int button,int cursorX,int cursorY){
+				return new InputHandler.Events.MouseEvent(cursorX,cursorY,
+						button==0?MouseEvent.Type.Release_Left:
+							MouseEvent.Type.Release_Right
+						);
 			}
 		}
-		public static class KeyboardEvent extends InputHandler.Event {
-			public static List<InputHandler.Events.KeyboardEvent.Listener> listeners = new ArrayList<InputHandler.Events.KeyboardEvent.Listener>();
+		public static abstract class KeyboardEvent extends InputHandler.Event {
 			protected int keyInt = 0;
 			protected char keyChar = 0;
 			public int getKeyInt(){
 				return keyInt;
+			}
+			public static Stream<Supplier<Event>> stream() {
+				return Stream.generate(()->Keyboard.next())
+						.takeWhile(B->B)
+						.map(B->Keyboard.getEventKeyState())
+						.map(S->S?
+						()->new InputHandler.Events.KeyboardEvent.Press(Keyboard.getEventKey(),Keyboard.getEventCharacter())
+						:
+						()->new InputHandler.Events.KeyboardEvent.Release(Keyboard.getEventKey())
+						);
 			}
 			public void setKeyInt(int newKeyInt){
 				keyInt=newKeyInt;
@@ -462,11 +331,7 @@ public class InputHandler extends Thread {
 					return true;
 				}
 				public void handle(){
-					synchronized(InputHandler.Events.KeyboardEvent.listeners){
-						for(InputHandler.Events.KeyboardEvent.Listener listener:InputHandler.Events.KeyboardEvent.listeners){
-							listener.listen(this);
-						}
-					}
+					InputHandler.Listeners.keyboard.forEach(L->L.listen(Press.this));
 				}
 				public Press (){
 					super();
@@ -483,11 +348,7 @@ public class InputHandler extends Thread {
 					return true;
 				}
 				public void handle(){
-					synchronized(InputHandler.Events.KeyboardEvent.listeners){
-						for(InputHandler.Events.KeyboardEvent.Listener listener:InputHandler.Events.KeyboardEvent.listeners){
-							listener.listen(this);
-						}
-					}
+					InputHandler.Listeners.keyboard.forEach(L->L.listen(Release.this));
 				}
 				public Release (){
 					super();
@@ -495,11 +356,7 @@ public class InputHandler extends Thread {
 			}
 		}
 	}
-	public static class Event {
-		public void handle(){
-		}
-		public Event (){
-			super();
-		}
+	public static abstract class Event {
+		public abstract void handle();
 	}
 }

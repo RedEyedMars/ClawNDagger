@@ -1,63 +1,61 @@
 package com.rem.clawndagger.entities.hero;
 
-import com.rem.clawndagger.entities.Entity;
-import com.rem.clawndagger.game.events.Events;
-import com.rem.clawndagger.game.events.Events.Draw;
-import com.rem.clawndagger.game.events.Events.Draw.Focus;
-import com.rem.clawndagger.game.events.Events.Tick;
-import com.rem.clawndagger.graphics.Renderer;
-import com.rem.clawndagger.graphics.images.ImageTemplate;
-import com.rem.clawndagger.graphics.images.animation.Animation;
-import com.rem.clawndagger.interfaces.Drawable;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Consumer;
+
+import com.rem.clawndagger.entities.Turtle;
+import com.rem.clawndagger.file.manager.Refiner;
+import com.rem.clawndagger.game.Game;
+import com.rem.clawndagger.graphics.InputHandler;
+import com.rem.clawndagger.graphics.InputHandler.Events.KeyboardEvent.Press;
+import com.rem.clawndagger.graphics.InputHandler.Events.KeyboardEvent.Release;
 import com.rem.clawndagger.levels.Level;
 
-public class Hero extends Entity._3<Hero.State> implements Drawable, Drawable.Focusable{
+@SuppressWarnings("unused")
+public class Hero extends Turtle<Hero> implements InputHandler.Events.KeyboardEvent.Listener {
 
-	private static final int ANIMATION_NEUTRAL = 0;
-	private static final int ANIMATION_JUMP = 1;
-	public static class State {
-		private boolean jumping = false;
-	}
-	private State state = new State();
-	public Hero(ImageTemplate heroImageTemplate,double x, double y, Level level) {
-		super(x, y, level);
-		animation = new Animation<Hero.State>(Renderer.topLayer ,dimensions,heroImageTemplate,new int[]{0,0}){ 
-			@Override
-			public Boolean update(State state) {
-				if(state.jumping){
-					this.flipBookIndex = ANIMATION_JUMP;
-				}
-				else {
-					this.flipBookIndex = ANIMATION_NEUTRAL;
-				}
-				return true;
-			}};
-	}
-	public Boolean jump(){
-		if(state.jumping){
-			return false;
+	private static Map<Integer,Consumer<Hero>> keyPresses = new HashMap<Integer,Consumer<Hero>>();
+	private static Map<Integer,Consumer<Hero>> keyReleases = new HashMap<Integer,Consumer<Hero>>();
+	static {
+		if(Game.gravity!=0.0){
+			keyPresses.put(203,Hero::walkLeft);
+			keyPresses.put(205,Hero::walkRight);
+			keyPresses.put(200,Hero::jump);
 		}
 		else {
-			state.jumping = true;
-			animation.update(state);
-			motion.addCollisionListener(S->{state.jumping=false; return false;});
-			return true;
+			keyPresses.put(203,Hero::walkLeft);
+			keyPresses.put(205,Hero::walkRight);
+			keyPresses.put(200,Hero::walkUp);
+			keyPresses.put(208,Hero::walkDown);
+		}
+		keyReleases.put(203,Hero::idleHorizontal);
+		keyReleases.put(205,Hero::idleHorizontal);
+		keyReleases.put(200,Hero::idleVertical);
+		keyReleases.put(208,Hero::idleVertical);
+	};
+	
+	public Hero() {
+		System.out.println("Made Hero");
+	}
+	
+	public Hero level(Level level){
+		super.level(level);
+		this.level.setHero(this);
+		return this;
+	}
+
+	@Override
+	public void listen(Press event) {
+		if(keyPresses.containsKey(event.getKeyInt())){
+			keyPresses.get(event.getKeyInt()).accept(this);
 		}
 	}
+
 	@Override
-	public Boolean on(Events.Draw.Focus focus) {
-		return animation.on(focus);
-	}
-	@Override
-	public Boolean on(Events.Draw.Unfocus focus) {
-		return animation.on(focus);
-	}
-	@Override
-	public Boolean on(Events.Draw draw) {
-		return animation.on(draw);
-	}
-	@Override
-	public int getTexture() {
-		return animation.getTexture();
+	public void listen(Release event) {
+		if(keyReleases.containsKey(event.getKeyInt())){
+			keyReleases.get(event.getKeyInt()).accept(this);
+		}
 	}
 }

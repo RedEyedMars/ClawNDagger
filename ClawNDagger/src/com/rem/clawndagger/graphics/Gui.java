@@ -1,13 +1,12 @@
 package com.rem.clawndagger.graphics;
-import java.util.ArrayList;
 import java.nio.FloatBuffer;
+import java.util.stream.Stream;
+
 import org.lwjgl.opengl.PixelFormat;
 
 import com.rem.clawndagger.game.Game;
 import com.rem.clawndagger.graphics.images.ImageLoader;
 
-import java.util.List;
-import org.lwjgl.opengl.GL11;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.Display;
@@ -129,14 +128,12 @@ public class Gui {
 	}
 	public DisplayMode getDisplayMode(int width,int height,int colourBits,int frequency){
 		try{
-			DisplayMode[] allDisplayModes = Display.getAvailableDisplayModes();
-			DisplayMode tempDisplayMode = null;
-			for(int i = 0;i<allDisplayModes.length;++i){
-				tempDisplayMode=allDisplayModes[i];
-				if(tempDisplayMode.getWidth()==width&&tempDisplayMode.getHeight()==height&&tempDisplayMode.getBitsPerPixel()==colourBits&&tempDisplayMode.getFrequency()==frequency){
-					return tempDisplayMode;
-				}
-			}
+			return Stream.of(Display.getAvailableDisplayModes())
+					.filter(tDM->tDM.getWidth()==width)
+					.filter(tDM->tDM.getHeight()==height)
+					.filter(tDM->tDM.getBitsPerPixel()==colourBits)
+					.filter(tDM->tDM.getFrequency()==frequency)
+					.findFirst().orElseThrow(()->new RuntimeException("getDisplayMode Failed!"));
 		}
 		catch(Exception e0){
 			e0.printStackTrace();

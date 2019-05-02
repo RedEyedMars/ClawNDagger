@@ -1,0 +1,23 @@
+com.rem.clawndagger.entities.hero.Hero hero
+	dimensions 0.05 0.05 0.051 0.051
+	bound true true true true
+	animation ImageTemplate.CLAWMENT_BASE
+	setName "hero"
+com.rem.clawndagger.entities.transitions.EntityTransitions$Normal$Triggered$Charge$Enemy rat1_charge
+	set_standard rat1 rat1_patrol -0.2 0.0 5.0
+com.rem.clawndagger.entities.enemies.Enemy rat1
+	dimensions 0.5 0.5 0.05 0.05
+	bound true true true true
+	animation ImageTemplate.LIL_RAT
+	setTransitions rat1_charge
+	setName "rat1"
+com.rem.clawndagger.entities.enemies.Enemy$Patrol$HorizontalBackAndForth rat1_patrol
+	period 0.015
+	set rat1
+com.rem.clawndagger.levels.Terrain spike1
+	dimensions 0.4 0.0 0.2 0.2
+	bound true true true true
+	animation ImageTemplate.CLAWMENT_BASE_2
+com.rem.clawndagger.levels.Backdrop backdrop
+	dimensions 4 1.0
+	animation ImageTemplate.BLUE_SKY

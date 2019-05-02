@@ -1,14 +1,8 @@
 package com.rem.clawndagger.game;
 
-import com.rem.clawndagger.entities.Entity;
 import com.rem.clawndagger.game.events.Events;
 import com.rem.clawndagger.graphics.Gui;
 import com.rem.clawndagger.graphics.InputHandler;
-import com.rem.clawndagger.graphics.InputHandler.Events.KeyboardEvent.Listener;
-import com.rem.clawndagger.graphics.InputHandler.Events.MouseEvent.Drag;
-import com.rem.clawndagger.graphics.InputHandler.Events.MouseEvent.Move;
-import com.rem.clawndagger.graphics.InputHandler.Events.MouseEvent.Press;
-import com.rem.clawndagger.graphics.InputHandler.Events.MouseEvent.Release;
 import com.rem.clawndagger.levels.Level;
 import com.rem.clawndagger.levels.village.Village;
 
@@ -18,13 +12,14 @@ public class Game implements InputHandler.Events.KeyboardEvent.Listener, InputHa
 	protected Double lastTick = System.currentTimeMillis()/1000.0;
 	protected Double thisTick = lastTick;
 	protected Level focus = null;
-	protected Entity hero = null;
 	protected boolean[] pressedKeys = new boolean[256];
 	public void load() {
-		focus = new Village();
+		focus = Level.load("./res/load");
+		//focus = new Village();focus.on(new Events.Load());
 		focus.on(new Events.Draw.Focus());
-		InputHandler.addKeyboardListener(this);
-		InputHandler.addMouseListener(this);
+		InputHandler.Listeners.keyboard.add(this);
+		InputHandler.Listeners.keyboard.add(focus.getHero());
+		InputHandler.Listeners.mouse.add(this);
 	}
 
 	public void update() {
@@ -32,28 +27,6 @@ public class Game implements InputHandler.Events.KeyboardEvent.Listener, InputHa
 		focus.on(new Events.Tick(thisTick-lastTick));
 		if(pressedKeys[1]){
 			Gui.isRunning=false;
-		}
-		if(pressedKeys[17]){
-			focus.getHero().getMotion().a.player.y = 0.5;
-			//Gui.renderer.moveView(0.0f,-0.01f);
-		}
-		else if(pressedKeys[31]){
-			focus.getHero().getMotion().a.player.y = -0.5;
-			//Gui.renderer.moveView(0.01f,0.0f);
-		}
-		else {
-			focus.getHero().getMotion().a.player.y = 0.0;
-		}
-		if(pressedKeys[30]){
-			focus.getHero().getMotion().a.player.x = -0.5;
-			//Gui.renderer.moveView(0.0f,0.01f);
-		}
-		else if(pressedKeys[32]){
-			focus.getHero().getMotion().a.player.x = 0.5;
-			//Gui.renderer.moveView(-0.01f,0.0f);
-		}
-		else {
-			focus.getHero().getMotion().a.player.x = 0.0;
 		}
 		
 		Gui.renderer.render();
@@ -63,17 +36,19 @@ public class Game implements InputHandler.Events.KeyboardEvent.Listener, InputHa
 
 	public void listen(InputHandler.Events.KeyboardEvent.Release event){
 		pressedKeys[event.getKeyInt()]=false;
+		//System.out.println("RELEASE");
 	}
 	public void listen(InputHandler.Events.KeyboardEvent.Press event){
 		pressedKeys[event.getKeyInt()]=true;
+		//System.out.println("RELEASE");
 	}
-	public void listen(InputHandler.Events.MouseEvent.Release event){
+	public void mouseRelease(InputHandler.Events.MouseEvent event){
 	}
-	public void listen(InputHandler.Events.MouseEvent.Press event){
+	public void mousePress(InputHandler.Events.MouseEvent event){
 	}
-	public void listen(InputHandler.Events.MouseEvent.Drag event){
+	public void mouseDrag(InputHandler.Events.MouseEvent event){
 	}
-	public void listen(InputHandler.Events.MouseEvent.Move event){
+	public void mouseMove(InputHandler.Events.MouseEvent event){
 	}
 
 }

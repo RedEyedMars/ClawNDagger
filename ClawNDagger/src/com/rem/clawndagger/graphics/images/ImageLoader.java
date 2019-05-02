@@ -14,40 +14,68 @@ import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.Map;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import java.io.File;
-public class ImageLoader {
-	protected Map<Integer, Map<Integer, FloatBuffer[][]>> textureBuffers = new HashMap<Integer, Map<Integer, FloatBuffer[][]>>(); 
-	private static Map<BiFunction<String, ImageTemplate,DataLoader>,List<ImageTemplate>> templateMap = new HashMap<BiFunction<String, ImageTemplate,DataLoader>,List<ImageTemplate>>();
-	static {
-		templateMap.put(ImageData256x512Loader::new, Arrays.asList(
-				ImageTemplate.CLAWMENT_BASE,
-				ImageTemplate.CLAWMENT_BASE_2
-				));
+public class ImageLoader { 
+	private static TextureBuffer4x8Loader loadTextureBuffer4x8Loader = new TextureBuffer4x8Loader();
+	private static TextureBuffer1x4Loader loadTextureBuffer1x4Loader = new TextureBuffer1x4Loader();
+	private static Stream<Supplier<Boolean>> mapTemplates(
+			Function<ImageTemplate,Consumer<TextureBufferLoader>> supplier,
+			TextureBufferLoader buffer,
+			ImageTemplate...templates){
+		return Stream.of(templates)
+				.unordered()
+				.map(supplier::apply)
+				.map(T->()->{T.accept(buffer);return true;});
 	}
-	private static interface DataLoader {
-		public void attach();
+	static {
+		loadTextureBuffer4x8Loader.start();
+		loadTextureBuffer1x4Loader.start();
+	}
+	private static interface TextureBufferLoader {
+		public FloatBuffer[][] getTextureBuffer();
+		public int getWidth();
+		public int getHeight();
 	}
 	public void load(){
-		ImageLoader.TextureBuffer4x8Loader loadTextureBuffer4x8Loader = new ImageLoader.TextureBuffer4x8Loader();
-		loadTextureBuffer4x8Loader.start();
-		templateMap.keySet().parallelStream().flatMap(factory->
-		  templateMap.get(factory).stream().map(IT->factory.apply(IT.getFileName(),IT))).sequential().forEach(Loader->Loader.attach());
-		
-		loadTextureBuffer4x8Loader.attach(
-				ImageTemplate.CLAWMENT_BASE,
-				ImageTemplate.CLAWMENT_BASE_2
-				);
-		
+		long start = System.currentTimeMillis();
+		//System.out.println(
+				Stream.of(
+				mapTemplates(
+						I->ImageLoader.build(I,256,516),
+						loadTextureBuffer4x8Loader,
+						ImageTemplate.CLAWMENT_BASE,
+						ImageTemplate.CLAWMENT_BASE_2,
+						ImageTemplate.LIL_RAT,
+						ImageTemplate.SQUARE
+						),
+				mapTemplates(
+						I->ImageLoader.build(I,1024,1024),
+						loadTextureBuffer1x4Loader,
+						ImageTemplate.BLUE_SKY
+						)
+				).parallel().unordered().flatMap(S->S).collect(Collectors.toList())
+				.stream().unordered().forEach(Supplier::get);
+				/*.mapToInt(S->
+				{
+					long start2 = System.currentTimeMillis();
+					S.get();
+					return (int)(System.currentTimeMillis()-start2);
+				}).sum())*/;
+		System.out.println("ImageLoader:"+(System.currentTimeMillis()-start));
 	}
-	
-	public ImageLoader (){
-		super();
-	}
-	
-	public class TextureBuffer4x8Loader extends Thread {
+
+
+	private static class TextureBuffer4x8Loader extends Thread implements TextureBufferLoader {
 		private FloatBuffer[][] textureBuffer = new FloatBuffer[4][8];
+		public FloatBuffer[][] getTextureBuffer(){
+			return textureBuffer;
+		}
 		public void run(){
 			ByteBuffer byteBuffer = null;
 			byteBuffer=ByteBuffer.allocateDirect(2*4*4);
@@ -212,134 +240,139 @@ public class ImageLoader {
 			textureBuffer[3][7].position(0);
 
 		}
-		public void attach(ImageTemplate... templates){
-			try {
-				this.join();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-			Arrays.stream(templates).forEach(template->{
-				template.setTextureBuffer(textureBuffer);
-				template.setFlippedTextureBuffer(textureBuffer);
-			});
-		}
 		public TextureBuffer4x8Loader (){
 			super();
 		}
+		@Override
+		public int getWidth() {
+			return 4;
+		}
+		@Override
+		public int getHeight() {
+			return 8;
+		}
 	}
-	public static class ImageData256x512Loader extends Thread implements DataLoader {
-		protected String fileName = null;
-		protected ByteBuffer pixelBuffer = null;
-		protected ByteBuffer flippedPixelBuffer = null;
-		protected Boolean failed = false;
-		private ImageTemplate template;
-		
-		public ImageData256x512Loader (String initialFileName, ImageTemplate template){
-			super();
-			this.fileName=initialFileName;
-			this.template = template;
-			start();
+	public static int getTextureFromPixelBuffer(ByteBuffer pixels, int width, int height){
+		int texture = 0;
+		IntBuffer textureHandle = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder()).asIntBuffer();
+		GL11.glGenTextures(textureHandle);
+		texture=textureHandle.get(0);
+		GL11.glPushAttrib(GL11.GL_TEXTURE_BIT);
+		GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture);
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_S,GL11.GL_REPEAT);
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_T,GL11.GL_REPEAT);
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,GL11.GL_NEAREST);
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,GL11.GL_NEAREST);
+		GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,GL11.GL_RGBA8,width,height,0,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,pixels);
+		GL11.glPopAttrib();
+		GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture);
+		int result = GLU.gluBuild2DMipmaps(GL11.GL_TEXTURE_2D,GL11.GL_RGBA8,width,height,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,pixels);
+		if(result!=0){
+			System.err.println("GLApp.makeTextureMipMap(): Error occured while building mip map, result="+result+" error="+GLU.gluErrorString(result));
+		}
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,GL11.GL_NEAREST);
+		GL11.glTexEnvf(GL11.GL_TEXTURE_ENV,GL11.GL_TEXTURE_ENV_MODE,GL11.GL_MODULATE);
+		return texture;
+	}
+
+	private static class TextureBuffer1x4Loader extends Thread implements TextureBufferLoader {
+		private FloatBuffer[][] textureBuffer  = new FloatBuffer[1][4];
+		public FloatBuffer[][] getTextureBuffer(){
+			return textureBuffer;
 		}
 		public void run(){
-			BufferedImage bufferedImage = null;
-			try{
-				bufferedImage=ImageIO.read(new File(fileName));
-			}
-			catch(Exception e0){
-				e0.printStackTrace();
-				failed=true;
-				return ;
-			}
-			int[] pixels = new int[131072];
-			PixelGrabber pixelGrabber = new PixelGrabber(bufferedImage,0,0,256,512,pixels,0,256);
-			try{
-				pixelGrabber.grabPixels();
-			}
-			catch(Exception e0){
-				System.err.println("Pixel Grabbing interrupted!");
-				failed=true;
-				return ;
-			}
-			byte[] bytes = new byte[524288];
-			byte[] flippedBytes = new byte[524288];
-			int p = 0;
-			int r = 0;
-			int g = 0;
-			int b = 0;
-			int a = 0;
-			int i = 0;
-			int j = 0;
-			int k = 0;
-			for(int y = 0;y<512;++y){
-				for(int x = 0;x<256;++x){
-					i=(256*y)+x;
-					j=i*4;
-					k=4*(256*(y+1)-x-1);
-					p=pixels[i];
-					a=(p>>24)&0xFF;
-					r=(p>>16)&0xFF;
-					g=(p>>8)&0xFF;
-					b=(p>>0)&0xFF;
-					bytes[j+0]=(byte)r;
-					bytes[j+1]=(byte)g;
-					bytes[j+2]=(byte)b;
-					bytes[j+3]=(byte)a;
-					flippedBytes[k+0]=(byte)r;
-					flippedBytes[k+1]=(byte)g;
-					flippedBytes[k+2]=(byte)b;
-					flippedBytes[k+3]=(byte)a;
-				}
-			}
-			pixelBuffer=ByteBuffer.allocateDirect(524288).order(ByteOrder.nativeOrder());
-			pixelBuffer.put(bytes).flip();
-			flippedPixelBuffer=ByteBuffer.allocateDirect(524288).order(ByteOrder.nativeOrder());
-			flippedPixelBuffer.put(flippedBytes).flip();
+			ByteBuffer byteBuffer = null;
+			byteBuffer=ByteBuffer.allocateDirect(2*4*4);
+			byteBuffer.order(ByteOrder.nativeOrder());
+			textureBuffer[0][0]=byteBuffer.asFloatBuffer();
+			textureBuffer[0][0].put(new float[]{0.0f,0.25f,0.0f,0.0f,1.0f,0.25f,1.0f,0.0f});
+			textureBuffer[0][0].position(0);
+			byteBuffer=ByteBuffer.allocateDirect(2*4*4);
+			byteBuffer.order(ByteOrder.nativeOrder());
+			textureBuffer[0][1]=byteBuffer.asFloatBuffer();
+			textureBuffer[0][1].put(new float[]{0.0f,0.5f,0.0f,0.25f,1.0f,0.5f,1.0f,0.25f});
+			textureBuffer[0][1].position(0);
+			byteBuffer=ByteBuffer.allocateDirect(2*4*4);
+			byteBuffer.order(ByteOrder.nativeOrder());
+			textureBuffer[0][2]=byteBuffer.asFloatBuffer();
+			textureBuffer[0][2].put(new float[]{0.0f,0.75f,0.0f,0.5f,1.0f,0.75f,1.0f,0.5f});
+			textureBuffer[0][2].position(0);
+			byteBuffer=ByteBuffer.allocateDirect(2*4*4);
+			byteBuffer.order(ByteOrder.nativeOrder());
+			textureBuffer[0][3]=byteBuffer.asFloatBuffer();
+			textureBuffer[0][3].put(new float[]{0.0f,1.0f,0.0f,0.75f,1.0f,1.0f,1.0f,0.75f});
+			textureBuffer[0][3].position(0);
 		}
-		public void attach(){
-			try{
-				super.join();
-			}
-			catch(InterruptedException e0){
-				e0.printStackTrace();
-			}
-			if(failed==true){
-				template.setTexture(0);
-				return ;
-			}
-			template.setTexture(getTextureFromPixelBuffer(pixelBuffer));
-			template.setFlippedTexture(getTextureFromPixelBuffer(flippedPixelBuffer));
+		@Override
+		public int getWidth() {
+			return 1;
 		}
-		public static int getTextureFromPixelBuffer(ByteBuffer pixels){
-			int texture = 0;
-			IntBuffer textureHandle = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder()).asIntBuffer();
-			GL11.glGenTextures(textureHandle);
-			texture=textureHandle.get(0);
-			GL11.glPushAttrib(GL11.GL_TEXTURE_BIT);
-			GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_S,GL11.GL_REPEAT);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_T,GL11.GL_REPEAT);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,GL11.GL_NEAREST);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,GL11.GL_NEAREST);
-			GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,GL11.GL_RGBA8,256,512,0,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,pixels);
-			GL11.glPopAttrib();
-			GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture);
-			int result = GLU.gluBuild2DMipmaps(GL11.GL_TEXTURE_2D,GL11.GL_RGBA8,256,512,GL11.GL_RGBA,GL11.GL_UNSIGNED_BYTE,pixels);
-			if(result!=0){
-				System.err.println("GLApp.makeTextureMipMap(): Error occured while building mip map, result="+result+" error="+GLU.gluErrorString(result));
-			}
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,GL11.GL_NEAREST);
-			GL11.glTexEnvf(GL11.GL_TEXTURE_ENV,GL11.GL_TEXTURE_ENV_MODE,GL11.GL_MODULATE);
-			return texture;
-		}
-		public ImageData256x512Loader (String fileName,ByteBuffer pixelBuffer,ByteBuffer flippedPixelBuffer,Boolean failed){
-			super();
-			this.fileName=fileName;
-			this.pixelBuffer=pixelBuffer;
-			this.flippedPixelBuffer=flippedPixelBuffer;
-			this.failed=failed;
-		}
-		public ImageData256x512Loader (){
-			super();
+		@Override
+		public int getHeight() {
+			return 4;
 		}
 	}
+	private static BufferedImage getBufferedImage(String fileName){
+		try{
+			return ImageIO.read(new File(fileName));
+		}
+		catch(Exception e0){
+			e0.printStackTrace();
+			throw new RuntimeException("Failed to load image:"+fileName);
+		}
+	}
+	private static int[] getPixelGrabber(BufferedImage image, int width, int height){
+		int[] pixels = new int[width*height];
+		try{
+			new PixelGrabber(image,0,0,width,height,pixels,0,width).grabPixels();
+			return pixels;
+		}
+		catch(Exception e0){
+			throw new RuntimeException("Failed to Grab Pixels");
+		}
+	}
+	public static Consumer<TextureBufferLoader> build(ImageTemplate template,
+			int width, int height){
+			int[] pixels = getPixelGrabber(
+					getBufferedImage(template.getFileName()),width,height);
+			ByteBuffer pixelBuffer=ByteBuffer.allocateDirect(width*height*4).order(ByteOrder.nativeOrder());
+			ByteBuffer flippedPixelBuffer=ByteBuffer.allocateDirect(width*height*4).order(ByteOrder.nativeOrder());
+			IntStream.range(0,height).boxed().parallel().flatMap(
+					Y->
+					IntStream.range(0,width).boxed().map(X->new int[]{
+								pixels[(width*Y)+X],
+								X,
+								Y}
+					)
+					).unordered().map(A->
+					new int[]{
+							(A[0]>>24)&0xFF,
+							(A[0]>>16)&0xFF,
+							(A[0]>>8)&0xFF,
+							(A[0]>>0)&0xFF,
+							4*((width*A[2])+A[1]),
+							4*(width*(A[2]+1)-A[1]-1)
+					}).peek(PAR->pixelBuffer.put(PAR[4],  (byte)PAR[1]))
+					  .peek(PAR->pixelBuffer.put(PAR[4]+1,(byte)PAR[2]))
+					  .peek(PAR->pixelBuffer.put(PAR[4]+2,(byte)PAR[3]))
+					  .peek(PAR->pixelBuffer.put(PAR[4]+3,(byte)PAR[0]))
+					  
+					  .peek(PAR->flippedPixelBuffer.put(PAR[5],(byte)PAR[1]))
+					  .peek(PAR->flippedPixelBuffer.put(PAR[5]+1,(byte)PAR[2]))
+					  .peek(PAR->flippedPixelBuffer.put(PAR[5]+2,(byte)PAR[3]))
+					  .forEach(PAR->flippedPixelBuffer.put(PAR[5]+3,(byte)PAR[0]));
+
+			pixelBuffer.position(width*height*4);
+			pixelBuffer.flip();
+			flippedPixelBuffer.position(width*height*4);
+			flippedPixelBuffer.flip();
+			return TB->
+			{
+				template.setTexture(getTextureFromPixelBuffer(pixelBuffer,width,height));
+				template.setFlippedTexture(getTextureFromPixelBuffer(flippedPixelBuffer,width,height));
+				template.setTextureBuffer(TB.getTextureBuffer());
+				template.setFlippedTextureBuffer(TB.getTextureBuffer());
+				template.setVisualPixelDimensions(width/TB.getWidth(),height/TB.getHeight());
+			};
+		}
 }

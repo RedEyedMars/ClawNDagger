@@ -5,23 +5,31 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import com.rem.clawndagger.levels.Collisionable;
+import com.rem.clawndagger.interfaces.Collisionable;
 
-public class Motion {
+public class Motion extends Position {
 
-	public Position s = new Position(0,0);
+	
 	public Acceleration a = new Acceleration(0,0);
 	private Set<Predicate<Collisionable>> collisionListeners = new HashSet<Predicate<Collisionable>>();
-	private Position leftBound;
-	private Position rightBound;
-	
-	public Boolean next(Position position, double t){
-		//System.out.println(s.x);
-		position.x = position.x + s.x*t;
-		position.y = position.y + s.y*t;
-		s.x = s.x + a.x*t;
-		s.y = s.y + a.y*t;
-		a.next(t);
+	public Motion(double x, double y) {
+		super(x, y);
+	}
+	public Rectangle next(Rectangle origin, double t){
+		Rectangle nextRectangle = new Rectangle(origin.getX(),origin.getY(),origin.getWidth(),origin.getHeight());
+		nextRectangle.setX(nextRectangle.getX() + getX()*t);
+		nextRectangle.setY(nextRectangle.getY() + getY()*t);
+		setX(getX() + a.getX()*t);
+		setY(getY() + a.getY()*t);
+		a.next(this,t);
+		return nextRectangle;
+	}
+	public Boolean next(Position nextRectangle, double t){
+		nextRectangle.setX(nextRectangle.getX() + getX()*t);
+		nextRectangle.setY(nextRectangle.getY() + getY()*t);
+		setX(getX() + a.getX()*t);
+		setY(getY() + a.getY()*t);
+		a.next(this,t);
 		return true;
 	}
 	public Boolean collide(Collisionable collider){
@@ -35,16 +43,16 @@ public class Motion {
 		return this.collisionListeners .remove(listener);
 	}
 	public double getAngleToAcceleration() {
-		if(a.x==0){
+		if(a.getX()==0){
 			return  -Math.PI/2;
 		}
 		else {
-			return Math.atan2(a.y, a.x);
+			return Math.atan2(a.getY(), a.getX());
 		}
 	}
 	public double getAngleToSpeed() {
-		if(s.x==0){
-			if(s.y>=0){
+		if(getX()==0){
+			if(getY()>=0){
 				return  Math.PI/2;
 			}
 			else {
@@ -52,11 +60,10 @@ public class Motion {
 			}
 		}
 		else {
-			return Math.atan2(s.y, s.x);
+			return Math.atan2(getY(), getX());
 		}
 	}
-	public void mustProceed(Position left, Position right) {
-		leftBound = left;
-		rightBound = right;
+	public Boolean isMoving() {
+		return Math.abs(getX())>0.000000001||Math.abs(getY())>0.000000001;
 	}
 }

@@ -8,6 +8,5 @@ public interface Drawable {
 		public Boolean on(Events.Draw.Focus focus);
 		public Boolean on(Events.Draw.Unfocus focus);
 	}
-	public Boolean on(Events.Draw draw);
-	public int getTexture();
+	public Events.Draw on(Events.Draw draw);
 }
